@@ -22,7 +22,12 @@ def token_info(token): # Format token information in the required format
 
 def print_file(file_path, context):
     file = pyconll.load_from_url(file_path)
-    statistics = set()                           
+    statistics = set()    
+    bos = list()
+    bos.append("<bos>") # Beginning of sentence marker
+    eos = list()
+    eos.append("<eos>") # End of sentence marker
+
     with open(create_fn_from_url(file_path, "result", ".tsv"), "w+", newline='', encoding="utf-8") as f:
         for sentence in file:
             for token in sentence:
@@ -35,12 +40,17 @@ def print_file(file_path, context):
                     for i in range(1, context + 1):
                         if id - i > 0:
                             try:
-                                while not sentence[str(id-i)].feats or sentence[str(id-i)].form == '_': # Avoiding empty tags
+                                while sentence[str(id-i)].upos == 'PUNCT' or sentence[str(id-i)].form == '_': # Avoiding punctuation or 'empty' words (_)
                                     id -= 1
                             except KeyError:
                                 pass
                             if id - i > 0:
                                 token_list.append(token_info(sentence[str(id - i)]))
+                            else:
+                                token_list.append(bos)
+                        else:
+                            token_list.append(bos)
+
                     token_list.reverse()
                     token_list.append(token_info(sentence[str(token_id)]))
 
@@ -50,18 +60,21 @@ def print_file(file_path, context):
                         end = int(sentence[len(sentence)-1].id)
                         if id + i <= end:
                             try:
-                                while not sentence[str(id+i)].feats or sentence[str(id+i)].form == '_': # Avoiding empty tags
+                                while sentence[str(id+i)].upos == 'PUNCT' or sentence[str(id+i)].form == '_': # Avoiding punctuation or 'empty' words (_)
                                         id += 1
                             except KeyError:
                                 pass
                             if id + i <= end:
                                 token_list.append(token_info(sentence[str(id + i)]))
+                            else:
+                                token_list.append(eos)
+                        else:
+                            token_list.append(eos)
 
                     tsv = csv.writer(f, delimiter='\t')  
-                    if len(token_list) > context*2: # Output only lists with appropriate length
-                        for list_elem in token_list:
-                            tsv.writerow(list_elem)
-                        tsv.writerow([])
+                    for list_elem in token_list:
+                        tsv.writerow(list_elem)
+                    tsv.writerow([])
 
 def read_file(file):
     with open(file, 'r') as f:
