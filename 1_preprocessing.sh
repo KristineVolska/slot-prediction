@@ -7,7 +7,7 @@ train="https://raw.githubusercontent.com/UniversalDependencies/UD_Latvian-LVTB/m
 
 # To run, type e.g.:   ./1_preprocessing.sh 1 
 echo "Processing file" $dev
-python ./preprocessing.py --file $dev --context $1
+python ./1_preprocessing.py --file $dev --context $1
 
 echo "Processing file" $train
-python ./preprocessing.py --file $train --context $1
+python ./1_preprocessing.py --file $train --context $1
