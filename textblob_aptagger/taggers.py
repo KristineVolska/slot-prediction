@@ -28,6 +28,7 @@ class PerceptronTagger(BaseTagger):
 
     def __init__(self, load=True):
         self.model = AveragedPerceptron()
+        self.tagdict = {}
         self.classes = set()
         if load:
             self.load(self.AP_MODEL_LOC)
@@ -50,8 +51,10 @@ class PerceptronTagger(BaseTagger):
                 tag = word_n_tag[1]
                 word = word_n_tag[0]
                 if tag == "None":
-                    features = self._get_features(i, context_len, words)
-                    tag = self.model.predict(features)
+                    tag = self.tagdict.get(word)
+                    if not tag:
+                        features = self._get_features(i, context_len, word, words)
+                        tag = self.model.predict(features)
                 tokens.append((word, tag))
         return tokens
 
@@ -63,6 +66,7 @@ class PerceptronTagger(BaseTagger):
         :param nr_iter: Number of training iterations.
         '''
 
+        self._make_tagdict(sentences)
         self._count_classes(sentences)
         self.model.classes = self.classes
         for iter_ in range(nr_iter):
@@ -72,9 +76,11 @@ class PerceptronTagger(BaseTagger):
                 context_len = len(words) // 2
                 for i, word in enumerate(words):
                     if i == context_len:
-                        feats = self._get_features(i, context_len, tags)
-                        guess = self.model.predict(feats)
-                        self.model.update(tags[i], guess, feats)
+                        guess = self.tagdict.get(word)
+                        if not guess:
+                            feats = self._get_features(i, context_len, word, tags)
+                            guess = self.model.predict(feats)
+                            self.model.update(tags[i], guess, feats)
                         c += guess == tags[i]
                         n += 1
             random.shuffle(sentences)
@@ -83,7 +89,7 @@ class PerceptronTagger(BaseTagger):
         self.model.average_weights()
         # Pickle as a binary file
         if save_loc is not None:
-            pickle.dump((self.model.weights, self.classes),
+            pickle.dump((self.model.weights, self.tagdict, self.classes),
                         open(save_loc, 'wb'), -1)
         return None
 
@@ -94,11 +100,11 @@ class PerceptronTagger(BaseTagger):
         except IOError:
             msg = ("Missing model.pickle file.")
             raise MissingCorpusError(msg)
-        self.model.weights, self.classes = w_td_c
+        self.model.weights, self.tagdict, self.classes = w_td_c
         self.model.classes = self.classes
         return None
 
-    def _get_features(self, i, context_len, context):
+    def _get_features(self, i, context_len, word, context):
         '''Map tokens into a feature representation, implemented as a
         {hashable: float} dict. If the features change, a new model must be
         trained.
@@ -122,6 +128,9 @@ class PerceptronTagger(BaseTagger):
                     prev_tag = context[i - j]
             add('i-{0} tag'.format(j), prev_tag)
 
+        for i in range(1, 5):
+            add('ch-{0}'.format(i), word[-i:])
+
         for j in range(1, context_len + 1):
             try:
                 next_w = context[i + j]
@@ -142,6 +151,18 @@ class PerceptronTagger(BaseTagger):
             for i, tag in enumerate(tags):
                 if i == context_len:
                     self.classes.add(tag)
+
+    def _make_tagdict(self, sentences):
+        '''Make a tag dictionary for single-tag words.'''
+        counts = defaultdict(lambda: defaultdict(int))
+        for words, tags in sentences:
+            for word, tag in zip(words, tags):
+                counts[word][tag] += 1
+        for word, tag_freqs in counts.items():
+            tag_count = tag_freqs.items()
+            if len(tag_count) == 1:
+                tag, mode = max(tag_count, key=lambda item: item[1])
+                self.tagdict[word] = tag
 
 
 def _pc(n, d):
