@@ -42,8 +42,6 @@ class PerceptronTagger(BaseTagger):
             for s in s_split(corpus):
                 yield w_split(s)
 
-        prev = self.START
-        prev2 = self.START
         tokens = []
         for words in split_sents(corpus):
             context_len = len(words) // 2
@@ -52,11 +50,9 @@ class PerceptronTagger(BaseTagger):
                 tag = word_n_tag[1]
                 word = word_n_tag[0]
                 if tag == "None":
-                    features = self._get_features(i, context_len, prev, prev2, words)
+                    features = self._get_features(i, context_len, words)
                     tag = self.model.predict(features)
                 tokens.append((word, tag))
-                prev2 = prev
-                prev = tag
         return tokens
 
     def train(self, sentences, save_loc=None, nr_iter=5):
@@ -69,21 +65,18 @@ class PerceptronTagger(BaseTagger):
 
         self._count_classes(sentences)
         self.model.classes = self.classes
-        prev = self.START
-        prev2 = self.START
         for iter_ in range(nr_iter):
             c = 0
             n = 0
             for words, tags in sentences:
                 context_len = len(words) // 2
                 for i, word in enumerate(words):
-                    feats = self._get_features(i, context_len, prev, prev2, tags)
-                    guess = self.model.predict(feats)
-                    self.model.update(tags[i], guess, feats)
-                    prev2 = prev
-                    prev = guess
-                    c += guess == tags[i]
-                    n += 1
+                    if i == context_len:
+                        feats = self._get_features(i, context_len, tags)
+                        guess = self.model.predict(feats)
+                        self.model.update(tags[i], guess, feats)
+                        c += guess == tags[i]
+                        n += 1
             random.shuffle(sentences)
             logging.info("Iter {0}: {1}/{2}={3}".format(iter_, c, n, _pc(c, n)))
             print("Iter {0}: {1}/{2}={3}".format(iter_, c, n, _pc(c, n)))
@@ -105,7 +98,7 @@ class PerceptronTagger(BaseTagger):
         self.model.classes = self.classes
         return None
 
-    def _get_features(self, i, context_len, prev, prev2, context):
+    def _get_features(self, i, context_len, context):
         '''Map tokens into a feature representation, implemented as a
         {hashable: float} dict. If the features change, a new model must be
         trained.
@@ -118,23 +111,16 @@ class PerceptronTagger(BaseTagger):
         # It's useful to have a constant feature, which acts sort of like a prior
         add('bias')
         for j in range(1, context_len + 1):
-            if j == 1:
-                prev_tag = prev
-            elif j == 2 and context_len > 1:
-                prev_tag = prev2
-            else:
-                try:
-                    prev_w = context[i - j]
-                    prev_w_n_tag = tuple(map(str, prev_w.split('|')))
-                    prev_tag = prev_w_n_tag[1]
-                except IndexError:
-                    if i - j < 0:
-                        prev_tag = self.START
-                    else:
-                        prev_tag = context[i - j]
+            try:
+                prev_w = context[i - j]
+                prev_w_n_tag = tuple(map(str, prev_w.split('|')))
+                prev_tag = prev_w_n_tag[1]
+            except IndexError:
+                if i - j < 0:
+                    prev_tag = self.START
+                else:
+                    prev_tag = context[i - j]
             add('i-{0} tag'.format(j), prev_tag)
-
-        add('i-1 tag+i-2 tag', prev, prev2)
 
         for j in range(1, context_len + 1):
             try:

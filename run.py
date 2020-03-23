@@ -6,6 +6,7 @@ from io import open
 import csv
 from preprocessing import preprocessing
 from preprocessing import create_fn
+from datetime import timedelta
 
 def _read_tagged(text, sep='|'):
     sentences = []
@@ -105,24 +106,22 @@ def main():
     parser.add_argument("--context", help="Word count before and after target")
     args = parser.parse_args()
 
+    start = time.time()
+
     dev = "https://raw.githubusercontent.com/UniversalDependencies/UD_Latvian-LVTB/master/lv_lvtb-ud-dev.conllu"
     train = "https://raw.githubusercontent.com/UniversalDependencies/UD_Latvian-LVTB/master/lv_lvtb-ud-train.conllu"
 
     test = preprocessing(dev, int(args.context))
     train = preprocessing(train, int(args.context))
 
-    start = time.time()
-    start = start/60
-
     train_tagger(train)
     results = test_data(test)
 
     compare(test, results)
-    end = time.time()
-    end = end/60
+    elapsed = (time.time() - start)
 
     print("Execution time: ")
-    print(round(end - start, 2), "sec")
+    print(str(timedelta(seconds=elapsed)))
 
 if __name__ == "__main__":
     main()
