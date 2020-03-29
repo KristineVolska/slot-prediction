@@ -19,7 +19,7 @@ def create_fn_from_url(url, add, extension):
 
 def token_info(token):  # Format token information in the required format
     token_char = list()
-    token_char.append(token.form.replace(" ", ""))
+    token_char.append(token.form.replace(" ", "").replace("'", ""))
     string_to_append = token.upos.replace("PROPN", "NOUN")
     for k, v in token.feats.items():
         if token.upos in ['NOUN', 'PROPN']:

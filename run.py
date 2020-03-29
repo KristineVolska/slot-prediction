@@ -7,6 +7,8 @@ import csv
 from preprocessing import preprocessing
 from preprocessing import create_fn
 from datetime import timedelta
+import pandas as pd
+import seaborn as sn
 
 def _read_tagged(text, sep='|'):
     sentences = []
@@ -101,6 +103,42 @@ def compare(input, output):
     print("Accuracy:")
     print(round((total - wrong)/total * 100, 2), "%")
 
+
+def draw_confusion(class_file, diffs_file):
+    with open(class_file, 'r', encoding="utf-8") as file:
+        tsv = csv.reader(file, delimiter='\n')
+        classes = {}
+        for row in tsv:
+            tag = row[0].split("\tNOUN;", maxsplit=1)[1]
+            feats = tag.split(";")
+            feat = ""
+            for f in feats:
+                abr = f.split("=")[1][:2]
+                feat += abr
+            classes[tag] = feat
+
+    diffs = pd.read_csv(diffs_file, sep=' ', header=None).fillna(0)
+    conf_table = pd.DataFrame(columns=['y_Actual', 'y_Predicted'])
+
+    for i in range(0, diffs.shape[0], 2):
+        correct_row = diffs.iloc[i]
+        wrong_row = diffs.iloc[i + 1]
+        for c_val, w_val in zip(correct_row, wrong_row):
+            if c_val != w_val:
+                c_val = c_val.split("|NOUN;", maxsplit=1)[1]
+                c_val = classes.get(c_val)
+                try:
+                    w_val = w_val.split("|NOUN;", maxsplit=1)[1]
+                    w_val = classes.get(w_val)
+                except IndexError:
+                    w_val = "other"
+                conf_table = conf_table.append({'y_Actual': c_val, 'y_Predicted': w_val}, ignore_index=True)
+
+    confusion_matrix = pd.crosstab(conf_table['y_Actual'], conf_table['y_Predicted'], rownames=['Actual'], colnames=['Predicted'])
+    fig = sn.heatmap(confusion_matrix, annot=True, xticklabels=True, yticklabels=True, linewidths=.01).get_figure()
+    fig.set_size_inches(20, 15)
+    fig.savefig('confusion_matrix.png', dpi=300)
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--context", help="Word count before and after target")
@@ -119,6 +157,9 @@ def main():
 
     compare(test, results)
     elapsed = (time.time() - start)
+
+    # Draw confusion matrix
+    draw_confusion(create_fn(test, "NOUNS", ".tsv"), "differences.tsv")
 
     print("Execution time: ")
     print(str(timedelta(seconds=elapsed)))

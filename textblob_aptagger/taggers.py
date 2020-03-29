@@ -76,11 +76,9 @@ class PerceptronTagger(BaseTagger):
                 context_len = len(words) // 2
                 for i, word in enumerate(words):
                     if i == context_len:
-                        guess = self.tagdict.get(word)
-                        if not guess:
-                            feats = self._get_features(i, context_len, word, tags)
-                            guess = self.model.predict(feats)
-                            self.model.update(tags[i], guess, feats)
+                        feats = self._get_features(i, context_len, word, tags)
+                        guess = self.model.predict(feats)
+                        self.model.update(tags[i], guess, feats)
                         c += guess == tags[i]
                         n += 1
             random.shuffle(sentences)
