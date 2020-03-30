@@ -137,6 +137,7 @@ def draw_confusion(class_file, input, output):
             p_val = "other"
         conf_table = conf_table.append({'y_Actual': c_val, 'y_Predicted': p_val}, ignore_index=True)
     target_names.append("other")
+    target_names.sort()
 
     conf_matrix = confusion_matrix(conf_table['y_Actual'].to_numpy(), conf_table['y_Predicted'].to_numpy())
     plot_confusion_matrix(cm=conf_matrix,
