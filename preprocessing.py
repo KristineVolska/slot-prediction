@@ -36,11 +36,11 @@ def token_info(token):  # Format token information in the required format
 def create_input(file_path, context):
     file = pyconll.load_from_url(file_path)
     bos = list()
-    bos.append("-START-")  # Beginning of sentence marker
-    bos.append("-START-")
+    bos.append("START")  # Beginning of sentence marker
+    bos.append("START")
     eos = list()
-    eos.append("-END-")  # End of sentence marker
-    eos.append("-END-")
+    eos.append("END")  # End of sentence marker
+    eos.append("END")
 
     with open(create_fn_from_url(file_path, "input", ".tsv"), "w+", newline='', encoding="utf-8") as f:
         for sentence in file:

@@ -22,8 +22,8 @@ class PerceptronTagger(BaseTagger):
     :param load: Load the pickled model upon instantiation.
     '''
 
-    START = "-START-"
-    END = "-END-"
+    START = "START"
+    END = "END"
     AP_MODEL_LOC = os.path.join(os.path.dirname(__file__), PICKLE)
 
     def __init__(self, load=True):
