@@ -5,6 +5,12 @@ pip3 install textblob
 
 pip3 install pyconll
 
+pip3 install pandas
+
+pip3 install sklearn
+
+pip3 install openpyxl
+
 python3 run.py
 
 
