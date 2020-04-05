@@ -162,8 +162,4 @@ def draw_confusion(class_file, input, output):
 
     search_table.to_excel(writer, 'search', index=False)
     writer.save()
-
-    plot_confusion_matrix(cm=conf_matrix,
-                          normalize=False,
-                          target_names=target_names,
-                          title="Confusion Matrix")
+    plot_confusion_matrix(cm=conf_matrix, normalize=False, target_names=target_names, title="Confusion Matrix")
