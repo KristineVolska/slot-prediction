@@ -121,8 +121,7 @@ def draw_confusion(class_file, input, output):
     output_data = pd.DataFrame(text_after, columns=columns).fillna(0)
 
     conf_table = pd.DataFrame(columns=['y_Actual', 'y_Predicted'])
-
-    search_table = pd.DataFrame(index=None, columns=["tag_pair_key"]+columns)
+    search_table = pd.DataFrame(index=None, columns=["tag_pair_key", "i", "index", "Actual", "Predicted"])
 
     for i in range(0, input_data.shape[0]):
         c_val = input_data.iloc[i]['target']
@@ -139,18 +138,21 @@ def draw_confusion(class_file, input, output):
             p_val = "other"
         conf_table = conf_table.append({'y_Actual': c_val, 'y_Predicted': p_val}, ignore_index=True)
 
-        input_row = input_data.iloc[i].to_dict()
-        input_row.update({'tag_pair_key': "{0}-{1}".format(c_val, p_val)})
-        search_table = search_table.append(input_row, ignore_index=True)
+        input_row = pd.DataFrame.from_dict(input_data.iloc[i].to_dict(), orient='index', columns=['Actual'])
+        output_row = pd.DataFrame.from_dict(output_data.iloc[i].to_dict(), orient='index', columns=['Predicted'])
+        actual_predicted = pd.concat([input_row, output_row], axis=1, sort=False)
+        actual_predicted.reset_index(level=0, inplace=True)
+        actual_predicted['tag_pair_key'] = "{0}-{1}".format(c_val, p_val)
 
-        output_row = output_data.iloc[i].to_dict()
-        output_row.update({'tag_pair_key': "{0}-{1}".format(c_val, p_val)})
-        search_table = search_table.append(output_row, ignore_index=True)
+        order_values = list()
+        for x in range(1, context + 1):
+            order_values.append("{0}.{1}".format(i, x))
+        actual_predicted['i'] = order_values
+        search_table = search_table.append(actual_predicted, ignore_index=True)
     target_names.append("other")
     target_names.sort()
 
-    search_table = search_table.sort_values(by=['tag_pair_key', -(context // 2)])
-
+    search_table = search_table.sort_values(by=['tag_pair_key', 'i'])
     conf_matrix = confusion_matrix(conf_table['y_Actual'].to_numpy(), conf_table['y_Predicted'].to_numpy())
     file = "Confusion_matrix.xlsx"
     writer = pd.ExcelWriter(file, engine='openpyxl')
