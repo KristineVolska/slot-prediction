@@ -1,15 +1,7 @@
 To run:
 
 
-pip3 install textblob
-
-pip3 install pyconll
-
-pip3 install pandas
-
-pip3 install sklearn
-
-pip3 install openpyxl
+pip3 install textblob pyconll pandas sklearn openpyxl
 
 python3 run.py
 
@@ -23,6 +15,7 @@ python3 run.py
 | --iter n | Number of training iterations | n = 5 |
 | --suffix | Add this argument to use suffix analysis in training | False |
 | --part_tag | Add this argument to separate tags into morphological features | False |
+| --tag_iter | Add this argument to tag the test data set after each training iteration | False |
 
 *e.g.:*
 
