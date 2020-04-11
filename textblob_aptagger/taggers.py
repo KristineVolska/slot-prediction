@@ -74,6 +74,7 @@ class PerceptronTagger(BaseTagger):
         for iter_ in range(nr_iter):
             c = 0
             n = 0
+            random.shuffle(sentences)
             for words, tags in sentences:
                 context_len = len(words) // 2
                 for i, word in enumerate(words):
@@ -83,9 +84,8 @@ class PerceptronTagger(BaseTagger):
                         self.model.update(tags[i], guess, feats)
                         c += guess == tags[i]
                         n += 1
-            random.shuffle(sentences)
-            logging.info("Iter {0}: {1}/{2}={3}".format(iter_, c, n, _pc(c, n)))
-            print("Iter {0}: {1}/{2}={3}".format(iter_, c, n, _pc(c, n)))
+            logging.info("Iter {0}: {1}/{2}={3}".format(iter_ + 1, c, n, _pc(c, n)))
+            print("Iter {0}: {1}/{2}={3}".format(iter_ + 1, c, n, _pc(c, n)))
         self.model.average_weights()
         # Pickle as a binary file
         if save_loc is not None:
