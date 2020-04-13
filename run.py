@@ -48,15 +48,15 @@ def prepare_test_data(sentences):
     return test_sentences
 
 
-def train_tagger(file_path):
-    pos_tagger = PerceptronTagger(load=False)
+def train_tagger(load, file_path, nr_iter, suffix, part_tag):
+    pos_tagger = PerceptronTagger(load=load, use_suffix=suffix, part_tag=part_tag)
     text = read_file(file_path)
     sentences = _read_tagged(text)
-    pos_tagger.train(sentences, save_loc="textblob_aptagger/model.pickle")
+    pos_tagger.train(sentences, save_loc="textblob_aptagger/model.pickle", nr_iter=nr_iter)
 
 
-def test_data(input_file):
-    pos_tagger = PerceptronTagger()
+def test_data(input_file, suffix, part_tag):
+    pos_tagger = PerceptronTagger(use_suffix=suffix, part_tag=part_tag)
     text = read_file(input_file)
     sentences = _read_tagged(text)
     test_sentences = prepare_test_data(sentences)
@@ -70,11 +70,20 @@ def test_data(input_file):
     return result_file
 
 
+def run(load, train_set, test_set, iter, suffix, part_tag):
+    train_tagger(load, train_set, iter, suffix, part_tag)
+    results = test_data(test_set, suffix, part_tag)
+    draw_confusion(create_fn(test_set, "NOUNS", ".tsv"), test_set, results)
+
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--context", help="Word count before and after target")
+    parser.add_argument("--context", help="Word count before and after target", default=3)
+    parser.add_argument("--iter", help="Number of training iterations", default=5)
+    parser.add_argument('--suffix', help="Add this argument to use suffix analysis in training", action='store_true')
+    parser.add_argument('--part_tag', help="Add this argument to separate tags into morphological features", action='store_true')
+    parser.add_argument('--tag_iter', help="Add this argument to tag the test data set after each training iteration", action='store_true')
     args = parser.parse_args()
-
     start = time.time()
 
     dev = "https://raw.githubusercontent.com/UniversalDependencies/UD_Latvian-LVTB/master/lv_lvtb-ud-dev.conllu"
@@ -82,11 +91,15 @@ def main():
 
     test = preprocessing(dev, int(args.context))
     train = preprocessing(train, int(args.context))
-    train_tagger(train)
-    results = test_data(test)
 
-    # Draw confusion matrix
-    draw_confusion(create_fn(test, "NOUNS", ".tsv"), test, results)
+    if bool(args.tag_iter):  # Tag after each iteration
+        print("Iteration 1")
+        run(False, train, test, 1, bool(args.suffix), bool(args.part_tag))
+        for iter_n in range(1, int(args.iter)):
+            print("Iteration", iter_n + 1)
+            run(True, train, test, 1, bool(args.suffix), bool(args.part_tag))
+    else:  # Normal flow
+        run(False, train, test, int(args.iter), bool(args.suffix), bool(args.part_tag))
 
     print("Execution time: ")
     print(str(timedelta(seconds=(time.time() - start))))

@@ -26,10 +26,12 @@ class PerceptronTagger(BaseTagger):
     END = "END"
     AP_MODEL_LOC = os.path.join(os.path.dirname(__file__), PICKLE)
 
-    def __init__(self, load=True):
+    def __init__(self, load=True, use_suffix=False, part_tag=False):
         self.model = AveragedPerceptron()
         self.tagdict = {}
         self.classes = set()
+        self.use_suffix = use_suffix
+        self.part_tag = part_tag
         if load:
             self.load(self.AP_MODEL_LOC)
 
@@ -72,6 +74,7 @@ class PerceptronTagger(BaseTagger):
         for iter_ in range(nr_iter):
             c = 0
             n = 0
+            random.shuffle(sentences)
             for words, tags in sentences:
                 context_len = len(words) // 2
                 for i, word in enumerate(words):
@@ -81,9 +84,8 @@ class PerceptronTagger(BaseTagger):
                         self.model.update(tags[i], guess, feats)
                         c += guess == tags[i]
                         n += 1
-            random.shuffle(sentences)
-            logging.info("Iter {0}: {1}/{2}={3}".format(iter_, c, n, _pc(c, n)))
-            print("Iter {0}: {1}/{2}={3}".format(iter_, c, n, _pc(c, n)))
+            logging.info("Iter {0}: {1}/{2}={3}".format(iter_ + 1, c, n, _pc(c, n)))
+            print("Iter {0}: {1}/{2}={3}".format(iter_ + 1, c, n, _pc(c, n)))
         self.model.average_weights()
         # Pickle as a binary file
         if save_loc is not None:
@@ -124,10 +126,20 @@ class PerceptronTagger(BaseTagger):
                     prev_tag = self.START
                 else:
                     prev_tag = context[i - j]
-            add('i-{0} tag'.format(j), prev_tag)
+            if self.part_tag:
+                prev_tag = prev_tag.split(';')
+                for p, prev_feat in enumerate(prev_tag):
+                    curr_feat = prev_feat.split('=')
+                    if p == 0:
+                        add('Pos_i-{0}'.format(j), curr_feat[0])
+                    else:
+                        add('{0}_i-{1}'.format(curr_feat[0], j), curr_feat[1])
+            else:
+                add('i-{0} tag'.format(j), prev_tag)
 
-        for i in range(1, 5):
-            add('ch-{0}'.format(i), word[-i:])
+        if self.use_suffix:
+            for i in range(1, 5):
+                add('ch-{0}'.format(i), word[-i:])
 
         for j in range(1, context_len + 1):
             try:
@@ -139,8 +151,16 @@ class PerceptronTagger(BaseTagger):
                     next_tag = self.END
                 else:
                     next_tag = context[i + j]
-            add('i+{0} tag'.format(j), next_tag)
-
+            if self.part_tag:
+                next_tag = next_tag.split(';')
+                for n, next_feat in enumerate(next_tag):
+                    curr_feat = next_feat.split('=')
+                    if n == 0:
+                        add('Pos_i+{0}'.format(j), curr_feat[0])
+                    else:
+                        add('{0}_i+{1}'.format(curr_feat[0], j), curr_feat[1])
+            else:
+                add('i+{0} tag'.format(j), next_tag)
         return features
 
     def _count_classes(self, sentences):
