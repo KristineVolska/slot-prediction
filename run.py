@@ -8,6 +8,7 @@ from preprocessing import preprocessing
 from preprocessing import create_fn
 from datetime import timedelta
 from postprocessing import draw_confusion
+from postprocessing import read_results
 
 def _read_tagged(text, sep='|'):
     sentences = []
@@ -70,10 +71,22 @@ def test_data(input_file, suffix, part_tag):
     return result_file
 
 
+def compare(input, output):
+    text_before, context = read_results(input)
+    text_after, context = read_results(output)
+    wrong = 0
+    for bef, aft in zip(text_before, text_after):
+        if bef != aft:
+            wrong += 1
+    total = len(text_before)
+    accuracy = round(total - wrong) / total
+    print('Accuracy = {:0.4f}'.format(accuracy))
+
+
 def run(load, train_set, test_set, iter, suffix, part_tag):
     train_tagger(load, train_set, iter, suffix, part_tag)
     results = test_data(test_set, suffix, part_tag)
-    draw_confusion(create_fn(test_set, "NOUNS", ".tsv"), test_set, results)
+    compare(test_set, results)
 
 
 def main():
@@ -83,6 +96,7 @@ def main():
     parser.add_argument('--suffix', help="Add this argument to use suffix analysis in training", action='store_true')
     parser.add_argument('--part_tag', help="Add this argument to separate tags into morphological features", action='store_true')
     parser.add_argument('--tag_iter', help="Add this argument to tag the test data set after each training iteration", action='store_true')
+    parser.add_argument('--conf_m', help="Add this argument to create a confusion matrix", action='store_true')
     args = parser.parse_args()
     start = time.time()
 
@@ -101,6 +115,9 @@ def main():
     else:  # Normal flow
         run(False, train, test, int(args.iter), bool(args.suffix), bool(args.part_tag))
 
+    if bool(args.conf_m):
+        print("Creating confusion matrix...")
+        draw_confusion(create_fn(test, "NOUNS", ".tsv"), test, create_fn(test, "RESULTS", ".tsv"))
     print("Execution time: ")
     print(str(timedelta(seconds=(time.time() - start))))
 
