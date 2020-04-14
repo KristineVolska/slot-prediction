@@ -80,10 +80,12 @@ def draw_confusion(class_file, input, output):
     conf_matrix = confusion_matrix(conf_table['y_Actual'].to_numpy(), conf_table['y_Predicted'].to_numpy())
     file = "Confusion_matrix.xlsx"
     writer = pd.ExcelWriter(file, engine='openpyxl')
-    writer.book = load_workbook(file)
+    try:
+        writer.book = load_workbook(file)
+    except KeyError:
+        print("ERROR: The existing file", file, "is corrupted. Creating a new file.")
+        writer = pd.ExcelWriter("Confusion_matrix_2.xlsx", engine='openpyxl')
+
     pd.DataFrame(conf_matrix, index=target_names, columns=target_names).to_excel(writer, 'input')
     search_table.to_excel(writer, 'search', index=False)
     writer.save()
-
-    accuracy = np.trace(conf_matrix) / float(np.sum(conf_matrix))
-    print('Accuracy = {:0.4f}'.format(accuracy))
