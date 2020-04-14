@@ -92,7 +92,7 @@ def run(load, train_set, test_set, iter, suffix, part_tag):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--context", help="Word count before and after target", default=3)
-    parser.add_argument("--iter", help="Number of training iterations", default=1)
+    parser.add_argument("--iter", help="Number of training iterations", default=5)
     parser.add_argument('--suffix', help="Add this argument to use suffix analysis in training", action='store_true')
     parser.add_argument('--part_tag', help="Add this argument to separate tags into morphological features", action='store_true')
     parser.add_argument('--tag_iter', help="Add this argument to tag the test data set after each training iteration", action='store_true')
