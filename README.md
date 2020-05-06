@@ -16,6 +16,7 @@ python3 run.py
 | --suffix | Add this argument to use suffix analysis in training | False |
 | --part_tag | Add this argument to separate tags into morphological features | False |
 | --tag_iter | Add this argument to tag the test data set after each training iteration | False |
+| --conf_m | Add this argument to create a confusion matrix | False |
 
 *e.g.:*
 
