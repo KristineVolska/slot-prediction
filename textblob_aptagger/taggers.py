@@ -5,7 +5,6 @@ import random
 from collections import defaultdict
 import pickle
 import logging
-
 from textblob.base import BaseTagger
 from textblob.exceptions import MissingCorpusError
 from textblob_aptagger._perceptron import AveragedPerceptron
@@ -67,7 +66,6 @@ class PerceptronTagger(BaseTagger):
         :param save_loc: If not ``None``, saves a pickled model in this location.
         :param nr_iter: Number of training iterations.
         '''
-
         self._make_tagdict(sentences)
         self._count_classes(sentences)
         self.model.classes = self.classes
@@ -80,6 +78,9 @@ class PerceptronTagger(BaseTagger):
                 for i, word in enumerate(words):
                     if i == context_len:
                         feats = self._get_features(i, context_len, word, tags)
+                        th = random.random()
+                        if random.random() > th:  # Randomly drop out some feature representations
+                            feats = defaultdict(int)
                         guess = self.model.predict(feats)
                         self.model.update(tags[i], guess, feats)
                         c += guess == tags[i]
@@ -113,6 +114,9 @@ class PerceptronTagger(BaseTagger):
         def add(name, *args):
             features[' '.join((name,) + tuple(args))] += 1
 
+        def add_2(name, *args):  # Add heavier weights for more important features
+            features[' '.join((name,) + tuple(args))] += 2
+
         features = defaultdict(int)
         # It's useful to have a constant feature, which acts sort of like a prior
         add('bias')
@@ -135,7 +139,15 @@ class PerceptronTagger(BaseTagger):
                     else:
                         add('{0}_i-{1}'.format(curr_feat[0], j), curr_feat[1])
             else:
-                add('i-{0} tag'.format(j), prev_tag)
+                if j == 1:
+                    first_prev = prev_tag
+                    add_2('i-{0} tag'.format(j), prev_tag)
+                if j == 2:
+                    second_prev = prev_tag
+                    add('i-{0} tag'.format(j), prev_tag)
+                    add_2('2 prev tags', second_prev, first_prev)
+                else:
+                    add('i-{0} tag'.format(j), prev_tag)
 
         if self.use_suffix:
             for i in range(1, 5):
@@ -160,7 +172,16 @@ class PerceptronTagger(BaseTagger):
                     else:
                         add('{0}_i+{1}'.format(curr_feat[0], j), curr_feat[1])
             else:
-                add('i+{0} tag'.format(j), next_tag)
+                if j == 1:
+                    first_next = next_tag
+                    add_2('i+{0} tag'.format(j), next_tag)
+                if j == 2:
+                    second_next = next_tag
+                    add('i+{0} tag'.format(j), next_tag)
+                    add_2('2 next tags', first_next, second_next)
+                else:
+                    add('i+{0} tag'.format(j), next_tag)
+
         return features
 
     def _count_classes(self, sentences):

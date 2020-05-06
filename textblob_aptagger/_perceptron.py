@@ -45,7 +45,7 @@ class AveragedPerceptron(object):
         '''Update the feature weights.'''
         def upd_feat(c, f, w, v):
             param = (f, c)
-            self._totals[param] += (self.i - self._tstamps[param]) * w
+            self._totals[param] += (self.i - self._tstamps[param]) * w  # learning rate?
             self._tstamps[param] = self.i
             self.weights[f][c] = w + v
 

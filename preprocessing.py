@@ -1,9 +1,9 @@
-import argparse
 from io import open
 import pyconll
 import csv
 import os
 from collections import Counter
+from random_words import RandomWords
 
 
 def create_fn(filename, add, extension):
@@ -17,9 +17,12 @@ def create_fn_from_url(url, add, extension):
     return "{0}_{1}{2}".format(base, add, extension)
 
 
-def token_info(token):  # Format token information in the required format
+def token_info(token, generate_random=False):  # Format token information in the required format
     token_char = list()
-    token_char.append(token.form.replace(" ", "").replace("'", ""))
+    if generate_random:  # Generate random english word to imitate the case when target word is not translated
+        token_char.append(RandomWords().random_word().lower())
+    else:
+        token_char.append(token.form.replace(" ", "").replace("'", "").lower())
     string_to_append = token.upos.replace("PROPN", "NOUN")
     for k, v in token.feats.items():
         if token.upos in ['NOUN', 'PROPN']:
@@ -33,7 +36,7 @@ def token_info(token):  # Format token information in the required format
     return token_char
 
 
-def create_input(file_path, context):
+def create_input(file_path, gen_random, context):
     file = pyconll.load_from_url(file_path)
     bos = list()
     bos.append("START")  # Beginning of sentence marker
@@ -67,7 +70,7 @@ def create_input(file_path, context):
                             token_list.append(bos)
 
                     token_list.reverse()
-                    token_list.append(token_info(sentence[str(token_id)]))
+                    token_list.append(token_info(sentence[str(token_id)], gen_random))
 
                     # Take 'context' amount of words after target
                     id = token_id
@@ -120,7 +123,7 @@ def create_stats(file, context):
             n.write("{}\t{}\n".format(v, k))
 
 
-def preprocessing(file, context):
-    create_input(file, context)
+def preprocessing(file, gen_random, context):
+    create_input(file, gen_random, context)
     create_stats(create_fn_from_url(file, "input", ".tsv"), context)
     return create_fn_from_url(file, "input", ".tsv")
