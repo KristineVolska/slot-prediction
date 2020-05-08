@@ -107,10 +107,6 @@ def main():
     test = preprocessing(dev, bool(args.random), int(args.context))
     train = preprocessing(train, bool(args.random), int(args.context))
 
-    # If 'random' arg is selected, 'suffix' arg is set to True to 'analyse' the random suffix
-    if bool(args.random):
-        args.suffix = True
-
     if bool(args.tag_iter):  # Tag after each iteration
         print("Iteration 1")
         run(False, train, test, 1, bool(args.suffix), bool(args.part_tag))

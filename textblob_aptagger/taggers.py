@@ -52,9 +52,13 @@ class PerceptronTagger(BaseTagger):
                 tag = word_n_tag[1]
                 word = word_n_tag[0]
                 if tag == "None":
-                    tag = self.tagdict.get(word)
+                    if self.use_suffix:
+                        tag = self.tagdict.get(word)
+                    else:
+                        tag = self.tagdict.get(word[:-3])
                     if not tag:
-                        features = self._get_features(i, context_len, word, words)
+                        w_t = tuple(tuple(map(str, item.split('|'))) for item in words)
+                        features = self._get_features(i, context_len, word, w_t)
                         tag = self.model.predict(features)
                 tokens.append((word, tag))
         return tokens
@@ -77,10 +81,9 @@ class PerceptronTagger(BaseTagger):
                 context_len = len(words) // 2
                 for i, word in enumerate(words):
                     if i == context_len:
-                        feats = self._get_features(i, context_len, word, tags)
-                        th = random.random()
-                        if random.random() > th:  # Randomly drop out some feature representations
-                            feats = defaultdict(int)
+                        feats = self._get_features(i, context_len, word, tuple(zip(words, tags)))
+                        th = 0.2
+                        feats = defaultdict(int, {k: v for k, v in feats.items() if random.random() > th})
                         guess = self.model.predict(feats)
                         self.model.update(tags[i], guess, feats)
                         c += guess == tags[i]
@@ -122,9 +125,8 @@ class PerceptronTagger(BaseTagger):
         add('bias')
         for j in range(1, context_len + 1):
             try:
-                prev_w = context[i - j]
-                prev_w_n_tag = tuple(map(str, prev_w.split('|')))
-                prev_tag = prev_w_n_tag[1]
+                prev_w = context[i - j][0]
+                prev_tag = context[i - j][1]
             except IndexError:
                 if i - j < 0:
                     prev_tag = self.START
@@ -152,12 +154,13 @@ class PerceptronTagger(BaseTagger):
         if self.use_suffix:
             for i in range(1, 5):
                 add('ch-{0}'.format(i), word[-i:])
+        else:
+            add('word_start ', word[:-3])
 
         for j in range(1, context_len + 1):
             try:
-                next_w = context[i + j]
-                next_w_n_tag = tuple(map(str, next_w.split('|')))
-                next_tag = next_w_n_tag[1]
+                next_w = context[i + j][0]
+                next_tag = context[i + j][1]
             except IndexError:
                 if i + j >= len(context):
                     next_tag = self.END
@@ -194,14 +197,21 @@ class PerceptronTagger(BaseTagger):
     def _make_tagdict(self, sentences):
         '''Make a tag dictionary for single-tag words.'''
         counts = defaultdict(lambda: defaultdict(int))
-        for words, tags in sentences:
-            for word, tag in zip(words, tags):
-                counts[word][tag] += 1
+        if self.use_suffix:
+            for words, tags in sentences:
+                for word, tag in zip(words, tags):
+                    counts[word][tag] += 1
+        else:
+            for words, tags in sentences:
+                for word, tag in zip(words, tags):
+                    counts[word[:-3]][tag] += 1
+
         for word, tag_freqs in counts.items():
             tag_count = tag_freqs.items()
             if len(tag_count) == 1:
                 tag, mode = max(tag_count, key=lambda item: item[1])
-                self.tagdict[word] = tag
+                if "NOUN" in tag:
+                    self.tagdict[word] = tag
 
 
 def _pc(n, d):

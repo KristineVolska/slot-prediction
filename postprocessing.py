@@ -1,7 +1,6 @@
 import csv
 import pandas as pd
 from sklearn.metrics import confusion_matrix
-import matplotlib.pyplot as plt
 import numpy as np
 from openpyxl import load_workbook
 
@@ -46,6 +45,7 @@ def draw_confusion(class_file, input, output):
 
     conf_table = pd.DataFrame(columns=['y_Actual', 'y_Predicted'])
     search_table = pd.DataFrame(index=None, columns=["tag_pair_key", "i", "index", "Actual", "Predicted"])
+    contains_other = False
 
     for i in range(0, input_data.shape[0]):
         c_val = input_data.iloc[i]['target']
@@ -58,8 +58,10 @@ def draw_confusion(class_file, input, output):
             p_val = classes.get(p_val)
             if p_val is None:
                 p_val = "other"
+                contains_other = True
         except IndexError:
             p_val = "other"
+            contains_other = True
         conf_table = conf_table.append({'y_Actual': c_val, 'y_Predicted': p_val}, ignore_index=True)
 
         input_row = pd.DataFrame.from_dict(input_data.iloc[i].to_dict(), orient='index', columns=['Actual'])
@@ -73,7 +75,8 @@ def draw_confusion(class_file, input, output):
             order_values.append("{0}.{1}".format(i, x))
         actual_predicted['i'] = order_values
         search_table = search_table.append(actual_predicted, ignore_index=True)
-    target_names.append("other")
+    if contains_other:
+        target_names.append("other")
     target_names.sort()
 
     search_table = search_table.sort_values(by=['tag_pair_key', 'i'])
