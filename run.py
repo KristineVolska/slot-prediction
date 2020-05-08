@@ -80,7 +80,7 @@ def compare(input, output):
             wrong += 1
     total = len(text_before)
     accuracy = round(total - wrong) / total
-    print('Accuracy = {:0.4f}'.format(accuracy))
+    print('Accuracy: {0}/{1}={2:0.4f}'.format(total-wrong, total, accuracy))
 
 
 def run(load, train_set, test_set, iter, suffix, part_tag):
@@ -93,6 +93,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--context", help="Word count before and after target", default=3)
     parser.add_argument("--iter", help="Number of training iterations", default=5)
+    parser.add_argument('--random', help="Add this argument to generate a random english word for suffix", action='store_true')
     parser.add_argument('--suffix', help="Add this argument to use suffix analysis in training", action='store_true')
     parser.add_argument('--part_tag', help="Add this argument to separate tags into morphological features", action='store_true')
     parser.add_argument('--tag_iter', help="Add this argument to tag the test data set after each training iteration", action='store_true')
@@ -103,8 +104,8 @@ def main():
     dev = "https://raw.githubusercontent.com/UniversalDependencies/UD_Latvian-LVTB/master/lv_lvtb-ud-dev.conllu"
     train = "https://raw.githubusercontent.com/UniversalDependencies/UD_Latvian-LVTB/master/lv_lvtb-ud-train.conllu"
 
-    test = preprocessing(dev, int(args.context))
-    train = preprocessing(train, int(args.context))
+    test = preprocessing(dev, bool(args.random), int(args.context))
+    train = preprocessing(train, bool(args.random), int(args.context))
 
     if bool(args.tag_iter):  # Tag after each iteration
         print("Iteration 1")
@@ -112,7 +113,7 @@ def main():
         for iter_n in range(1, int(args.iter)):
             print("Iteration", iter_n + 1)
             run(True, train, test, 1, bool(args.suffix), bool(args.part_tag))
-    else:  # Normal flow
+    else:
         run(False, train, test, int(args.iter), bool(args.suffix), bool(args.part_tag))
 
     if bool(args.conf_m):

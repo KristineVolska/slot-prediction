@@ -5,7 +5,6 @@ import random
 from collections import defaultdict
 import pickle
 import logging
-
 from textblob.base import BaseTagger
 from textblob.exceptions import MissingCorpusError
 from textblob_aptagger._perceptron import AveragedPerceptron
@@ -53,7 +52,10 @@ class PerceptronTagger(BaseTagger):
                 tag = word_n_tag[1]
                 word = word_n_tag[0]
                 if tag == "None":
-                    tag = self.tagdict.get(word[:-3])
+                    if self.use_suffix:
+                        tag = self.tagdict.get(word)
+                    else:
+                        tag = self.tagdict.get(word[:-3])
                     if not tag:
                         w_t = tuple(tuple(map(str, item.split('|'))) for item in words)
                         features = self._get_features(i, context_len, word, w_t)
@@ -68,7 +70,6 @@ class PerceptronTagger(BaseTagger):
         :param save_loc: If not ``None``, saves a pickled model in this location.
         :param nr_iter: Number of training iterations.
         '''
-
         self._make_tagdict(sentences)
         self._count_classes(sentences)
         self.model.classes = self.classes
@@ -81,6 +82,8 @@ class PerceptronTagger(BaseTagger):
                 for i, word in enumerate(words):
                     if i == context_len:
                         feats = self._get_features(i, context_len, word, tuple(zip(words, tags)))
+                        th = 0.2
+                        feats = defaultdict(int, {k: v for k, v in feats.items() if random.random() > th})
                         guess = self.model.predict(feats)
                         self.model.update(tags[i], guess, feats)
                         c += guess == tags[i]
@@ -114,10 +117,13 @@ class PerceptronTagger(BaseTagger):
         def add(name, *args):
             features[' '.join((name,) + tuple(args))] += 1
 
+        def add_2(name, *args):  # Add heavier weights for more important features
+            features[' '.join((name,) + tuple(args))] += 2
+
         features = defaultdict(int)
         # It's useful to have a constant feature, which acts sort of like a prior
         add('bias')
-        for j in reversed(range(1, context_len + 1)):
+        for j in range(1, context_len + 1):
             try:
                 prev_w = context[i - j][0]
                 prev_tag = context[i - j][1]
@@ -127,20 +133,29 @@ class PerceptronTagger(BaseTagger):
                 else:
                     prev_tag = context[i - j]
             if self.part_tag:
-                add('i-{0} suffix'.format(j), prev_w[-3:])
                 prev_tag = prev_tag.split(';')
                 for p, prev_feat in enumerate(prev_tag):
                     curr_feat = prev_feat.split('=')
                     if p == 0:
                         add('Pos_i-{0}'.format(j), curr_feat[0])
                     else:
-                        if curr_feat[0] in ['Case', 'Gender', 'Number']:
-                            add('{0}_i-{1}'.format(curr_feat[0], j), curr_feat[1])
+                        add('{0}_i-{1}'.format(curr_feat[0], j), curr_feat[1])
             else:
-                add('i-{0} tag'.format(j), prev_tag)
-                add('i-{0} suffix'.format(j), prev_w[-3:])
+                if j == 1:
+                    first_prev = prev_tag
+                    add_2('i-{0} tag'.format(j), prev_tag)
+                if j == 2:
+                    second_prev = prev_tag
+                    add('i-{0} tag'.format(j), prev_tag)
+                    add_2('2 prev tags', second_prev, first_prev)
+                else:
+                    add('i-{0} tag'.format(j), prev_tag)
 
-        add('word_start ', word[:-3])
+        if self.use_suffix:
+            for i in range(1, 5):
+                add('ch-{0}'.format(i), word[-i:])
+        else:
+            add('word_start ', word[:-3])
 
         for j in range(1, context_len + 1):
             try:
@@ -152,18 +167,24 @@ class PerceptronTagger(BaseTagger):
                 else:
                     next_tag = context[i + j]
             if self.part_tag:
-                add('i+{0} suffix'.format(j), next_w[-3:])
                 next_tag = next_tag.split(';')
                 for n, next_feat in enumerate(next_tag):
                     curr_feat = next_feat.split('=')
                     if n == 0:
                         add('Pos_i+{0}'.format(j), curr_feat[0])
                     else:
-                        if curr_feat[0] in ['Case', 'Gender', 'Number']:
-                            add('{0}_i+{1}'.format(curr_feat[0], j), curr_feat[1])
+                        add('{0}_i+{1}'.format(curr_feat[0], j), curr_feat[1])
             else:
-                add('i+{0} tag'.format(j), next_tag)
-                add('i+{0} suffix'.format(j), next_w[-3:])
+                if j == 1:
+                    first_next = next_tag
+                    add_2('i+{0} tag'.format(j), next_tag)
+                if j == 2:
+                    second_next = next_tag
+                    add('i+{0} tag'.format(j), next_tag)
+                    add_2('2 next tags', first_next, second_next)
+                else:
+                    add('i+{0} tag'.format(j), next_tag)
+
         return features
 
     def _count_classes(self, sentences):
@@ -176,14 +197,21 @@ class PerceptronTagger(BaseTagger):
     def _make_tagdict(self, sentences):
         '''Make a tag dictionary for single-tag words.'''
         counts = defaultdict(lambda: defaultdict(int))
-        for words, tags in sentences:
-            for word, tag in zip(words, tags):
-                counts[word[:-3]][tag] += 1
-        for word_3, tag_freqs in counts.items():
+        if self.use_suffix:
+            for words, tags in sentences:
+                for word, tag in zip(words, tags):
+                    counts[word][tag] += 1
+        else:
+            for words, tags in sentences:
+                for word, tag in zip(words, tags):
+                    counts[word[:-3]][tag] += 1
+
+        for word, tag_freqs in counts.items():
             tag_count = tag_freqs.items()
             if len(tag_count) == 1:
                 tag, mode = max(tag_count, key=lambda item: item[1])
-                self.tagdict[word_3] = tag
+                if "NOUN" in tag:
+                    self.tagdict[word] = tag
 
 
 def _pc(n, d):
