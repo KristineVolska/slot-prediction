@@ -94,7 +94,7 @@ def main():
     parser.add_argument("--context", help="Word count before and after target", default=3)
     parser.add_argument("--iter", help="Number of training iterations", default=5)
     parser.add_argument('--random', help="Add this argument to generate a random english word for suffix", action='store_true')
-    parser.add_argument('--suffix', help="Add this argument to use suffix analysis in training", action='store_true')
+    parser.add_argument('--suffix', help="Add this argument to use target word suffix analysis in training", action='store_true')
     parser.add_argument('--part_tag', help="Add this argument to separate tags into morphological features", action='store_true')
     parser.add_argument('--tag_iter', help="Add this argument to tag the test data set after each training iteration", action='store_true')
     parser.add_argument('--conf_m', help="Add this argument to create a confusion matrix", action='store_true')
