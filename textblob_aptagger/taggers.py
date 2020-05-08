@@ -8,6 +8,7 @@ import logging
 from textblob.base import BaseTagger
 from textblob.exceptions import MissingCorpusError
 from textblob_aptagger._perceptron import AveragedPerceptron
+from array import *
 
 PICKLE = "model.pickle"
 
@@ -23,16 +24,17 @@ class PerceptronTagger(BaseTagger):
 
     START = "START"
     END = "END"
-    AP_MODEL_LOC = os.path.join(os.path.dirname(__file__), PICKLE)
 
-    def __init__(self, load=True, use_suffix=False, part_tag=False):
+    def __init__(self, load=True, model_file=PICKLE, use_suffix=False, part_tag=False):
+        load_path = os.path.join(os.path.dirname(__file__), model_file)
         self.model = AveragedPerceptron()
         self.tagdict = {}
         self.classes = set()
         self.use_suffix = use_suffix
         self.part_tag = part_tag
+        self.dev_accuracy = array('f', [0])
         if load:
-            self.load(self.AP_MODEL_LOC)
+            self.load(load_path)
 
     def tag(self, corpus, tokenize=False):
         '''Tags a string `corpus`.'''
@@ -91,10 +93,32 @@ class PerceptronTagger(BaseTagger):
             logging.info("Iter {0}: {1}/{2}={3}".format(iter_ + 1, c, n, _pc(c, n)))
             print("Iter {0}: {1}/{2}={3}".format(iter_ + 1, c, n, _pc(c, n)))
         self.model.average_weights()
-        # Pickle as a binary file
-        if save_loc is not None:
-            pickle.dump((self.model.weights, self.tagdict, self.classes),
-                        open(save_loc, 'wb'), -1)
+        if nr_iter == 1:
+            cr_iter = 3
+            dev_input = "lv_lvtb-ud-dev_input.tsv"
+            import run
+            dev_results = run.test_data(dev_input, self)
+            curr_accuracy = run.compare(dev_input, dev_results)
+            self.dev_accuracy.append(curr_accuracy)
+            max_acc = max(self.dev_accuracy)
+            if round(max_acc, 6) <= curr_accuracy:
+                pickle.dump((self.model.weights, self.tagdict, self.classes, self.dev_accuracy),
+                            open("textblob_aptagger/model_max.pickle", 'wb'), -1)
+            max_index = self.dev_accuracy.index(max_acc)
+            size = len(self.dev_accuracy)
+            if size - 1 - cr_iter == max_index:
+                print("Stopping criterion is met, stopping the training")
+                return True
+            else:
+                # Pickle as a binary file
+                if save_loc is not None:
+                    pickle.dump((self.model.weights, self.tagdict, self.classes, self.dev_accuracy),
+                                open(save_loc, 'wb'), -1)
+        else:
+            # Pickle as a binary file
+            if save_loc is not None:
+                pickle.dump((self.model.weights, self.tagdict, self.classes, self.dev_accuracy),
+                            open(save_loc, 'wb'), -1)
         return None
 
     def load(self, loc):
@@ -104,7 +128,7 @@ class PerceptronTagger(BaseTagger):
         except IOError:
             msg = ("Missing model.pickle file.")
             raise MissingCorpusError(msg)
-        self.model.weights, self.tagdict, self.classes = w_td_c
+        self.model.weights, self.tagdict, self.classes, self.dev_accuracy = w_td_c
         self.model.classes = self.classes
         return None
 

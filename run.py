@@ -53,11 +53,10 @@ def train_tagger(load, file_path, nr_iter, suffix, part_tag):
     pos_tagger = PerceptronTagger(load=load, use_suffix=suffix, part_tag=part_tag)
     text = read_file(file_path)
     sentences = _read_tagged(text)
-    pos_tagger.train(sentences, save_loc="textblob_aptagger/model.pickle", nr_iter=nr_iter)
+    return pos_tagger.train(sentences, save_loc="textblob_aptagger/model.pickle", nr_iter=nr_iter)
 
 
-def test_data(input_file, suffix, part_tag):
-    pos_tagger = PerceptronTagger(use_suffix=suffix, part_tag=part_tag)
+def test_data(input_file, pos_tagger):
     text = read_file(input_file)
     sentences = _read_tagged(text)
     test_sentences = prepare_test_data(sentences)
@@ -81,11 +80,13 @@ def compare(input, output):
     total = len(text_before)
     accuracy = round(total - wrong) / total
     print('Accuracy: {0}/{1}={2:0.4f}'.format(total-wrong, total, accuracy))
+    return round(accuracy, 6)
 
 
 def run(load, train_set, test_set, iter, suffix, part_tag):
     train_tagger(load, train_set, iter, suffix, part_tag)
-    results = test_data(test_set, suffix, part_tag)
+    pos_tagger = PerceptronTagger(use_suffix=suffix, part_tag=part_tag)
+    results = test_data(test_set, pos_tagger)
     compare(test_set, results)
 
 
@@ -101,23 +102,35 @@ def main():
     args = parser.parse_args()
     start = time.time()
 
-    dev = "https://raw.githubusercontent.com/UniversalDependencies/UD_Latvian-LVTB/master/lv_lvtb-ud-dev.conllu"
     train = "https://raw.githubusercontent.com/UniversalDependencies/UD_Latvian-LVTB/master/lv_lvtb-ud-train.conllu"
+    dev = "https://raw.githubusercontent.com/UniversalDependencies/UD_Latvian-LVTB/master/lv_lvtb-ud-dev.conllu"
+    test = "https://raw.githubusercontent.com/UniversalDependencies/UD_Latvian-LVTB/master/lv_lvtb-ud-test.conllu"
 
-    test = preprocessing(dev, bool(args.random), int(args.context))
     train = preprocessing(train, bool(args.random), int(args.context))
+    validation = preprocessing(dev, bool(args.random), int(args.context))
+    test = preprocessing(test, bool(args.random), int(args.context))
 
-    if bool(args.tag_iter):  # Tag after each iteration
-        print("Iteration 1")
-        run(False, train, test, 1, bool(args.suffix), bool(args.part_tag))
-        for iter_n in range(1, int(args.iter)):
-            print("Iteration", iter_n + 1)
-            run(True, train, test, 1, bool(args.suffix), bool(args.part_tag))
+    # Tag validation data set after each iteration
+    if bool(args.tag_iter):
+        stop_criterion = False
+        iter_n = 1
+        print("Iteration", iter_n)
+        train_tagger(False, train, 1, bool(args.suffix), bool(args.part_tag))
+        while not stop_criterion:
+            iter_n += 1
+            print("Iteration", iter_n)
+            stop_criterion = train_tagger(True, train, 1, bool(args.suffix), bool(args.part_tag))
+        print("Starting the TEST data set tagging")
+        results = test_data(test, PerceptronTagger(model_file="model_max.pickle", use_suffix=bool(args.suffix), part_tag=bool(args.part_tag)))
+        print("Final results in TEST set:")
+        compare(test, results)
+    # Tag validation data set only after all training iterations
     else:
-        run(False, train, test, int(args.iter), bool(args.suffix), bool(args.part_tag))
+        run(False, train, validation, int(args.iter), bool(args.suffix), bool(args.part_tag))
+        test = validation
 
     if bool(args.conf_m):
-        print("Creating confusion matrix...")
+        print("Creating confusion matrix for", create_fn(test, "RESULTS", ".tsv"))
         draw_confusion(create_fn(test, "NOUNS", ".tsv"), test, create_fn(test, "RESULTS", ".tsv"))
     print("Execution time: ")
     print(str(timedelta(seconds=(time.time() - start))))
