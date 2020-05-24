@@ -25,13 +25,16 @@ class PerceptronTagger(BaseTagger):
     START = "START"
     END = "END"
 
-    def __init__(self, load=True, model_file=PICKLE, use_suffix=False, part_tag=False):
+    def __init__(self, load=True, model_file=PICKLE, use_suffix=False, part_tag=False, use_dropout=False, use_comb=0):
         load_path = os.path.join(os.path.dirname(__file__), model_file)
+        logging.basicConfig(filename="logging_file.txt", level=logging.INFO)
         self.model = AveragedPerceptron()
         self.tagdict = {}
         self.classes = set()
         self.use_suffix = use_suffix
         self.part_tag = part_tag
+        self.use_dropout = use_dropout
+        self.use_comb = use_comb
         self.dev_accuracy = array('f', [0])
         if load:
             self.load(load_path)
@@ -54,14 +57,9 @@ class PerceptronTagger(BaseTagger):
                 tag = word_n_tag[1]
                 word = word_n_tag[0]
                 if tag == "None":
-                    if self.use_suffix:
-                        tag = self.tagdict.get(word)
-                    else:
-                        tag = self.tagdict.get(word[:-3])
-                    if not tag:
-                        w_t = tuple(tuple(map(str, item.split('|'))) for item in words)
-                        features = self._get_features(i, context_len, word, w_t)
-                        tag = self.model.predict(features)
+                    w_t = tuple(tuple(map(str, item.split('|'))) for item in words)
+                    features = self._get_features(i, context_len, word, w_t)
+                    tag = self.model.predict(features)
                 tokens.append((word, tag))
         return tokens
 
@@ -72,7 +70,6 @@ class PerceptronTagger(BaseTagger):
         :param save_loc: If not ``None``, saves a pickled model in this location.
         :param nr_iter: Number of training iterations.
         '''
-        self._make_tagdict(sentences)
         self._count_classes(sentences)
         self.model.classes = self.classes
         for iter_ in range(nr_iter):
@@ -84,8 +81,9 @@ class PerceptronTagger(BaseTagger):
                 for i, word in enumerate(words):
                     if i == context_len:
                         feats = self._get_features(i, context_len, word, tuple(zip(words, tags)))
-                        th = 0.2
-                        feats = defaultdict(int, {k: v for k, v in feats.items() if random.random() > th})
+                        if self.use_dropout:
+                            th = random.random()
+                            feats = defaultdict(int, {k: v for k, v in feats.items() if random.random() > th})
                         guess = self.model.predict(feats)
                         self.model.update(tags[i], guess, feats)
                         c += guess == tags[i]
@@ -141,15 +139,11 @@ class PerceptronTagger(BaseTagger):
         def add(name, *args):
             features[' '.join((name,) + tuple(args))] += 1
 
-        def add_2(name, *args):  # Add heavier weights for more important features
-            features[' '.join((name,) + tuple(args))] += 2
-
         features = defaultdict(int)
         # It's useful to have a constant feature, which acts sort of like a prior
         add('bias')
         for j in range(1, context_len + 1):
             try:
-                prev_w = context[i - j][0]
                 prev_tag = context[i - j][1]
             except IndexError:
                 if i - j < 0:
@@ -165,25 +159,29 @@ class PerceptronTagger(BaseTagger):
                     else:
                         add('{0}_i-{1}'.format(curr_feat[0], j), curr_feat[1])
             else:
-                if j == 1:
-                    first_prev = prev_tag
-                    add_2('i-{0} tag'.format(j), prev_tag)
-                if j == 2:
-                    second_prev = prev_tag
+                if self.use_comb == 1:  # Use one combined feature representing context_len words before target
                     add('i-{0} tag'.format(j), prev_tag)
-                    add_2('2 prev tags', second_prev, first_prev)
+                    tag_list = list()
+                    if j != 1 and j == context_len:
+                        for t in range(1, j + 1):
+                            tag_list.append(context[i - t][1])
+                        add('{0} prev tags'.format(j), *tag_list)
+                elif self.use_comb == 2:  # Use all combined features
+                    tag_list = list()
+                    for t in range(1, j + 1):
+                        tag_list.append(context[i - t][1])
+                    add('i-{0} tag'.format(j), prev_tag)
+                    if j != 1:
+                        add('{0} prev tags'.format(j), *tag_list)
                 else:
                     add('i-{0} tag'.format(j), prev_tag)
 
         if self.use_suffix:
-            for i in range(1, 5):
-                add('ch-{0}'.format(i), word[-i:])
-        else:
-            add('word_start ', word[:-3])
+            for k in range(1, 5):
+                add('ch-{0}'.format(k), word[-k:])
 
         for j in range(1, context_len + 1):
             try:
-                next_w = context[i + j][0]
                 next_tag = context[i + j][1]
             except IndexError:
                 if i + j >= len(context):
@@ -199,13 +197,20 @@ class PerceptronTagger(BaseTagger):
                     else:
                         add('{0}_i+{1}'.format(curr_feat[0], j), curr_feat[1])
             else:
-                if j == 1:
-                    first_next = next_tag
-                    add_2('i+{0} tag'.format(j), next_tag)
-                if j == 2:
-                    second_next = next_tag
+                if self.use_comb == 1:  # Use one combined feature representing context_len words after target
                     add('i+{0} tag'.format(j), next_tag)
-                    add_2('2 next tags', first_next, second_next)
+                    tag_list = list()
+                    if j != 1 and j == context_len:
+                        for t in range(1, j + 1):
+                            tag_list.append(context[i + t][1])
+                        add('{0} next tags'.format(j), *tag_list)
+                elif self.use_comb == 2:  # Use all combined features
+                    tag_list = list()
+                    for t in range(1, j + 1):
+                        tag_list.append(context[i + t][1])
+                    add('i+{0} tag'.format(j), next_tag)
+                    if j != 1:
+                        add('{0} next tags'.format(j), *tag_list)
                 else:
                     add('i+{0} tag'.format(j), next_tag)
 
@@ -217,25 +222,6 @@ class PerceptronTagger(BaseTagger):
             for i, tag in enumerate(tags):
                 if i == context_len:
                     self.classes.add(tag)
-
-    def _make_tagdict(self, sentences):
-        '''Make a tag dictionary for single-tag words.'''
-        counts = defaultdict(lambda: defaultdict(int))
-        if self.use_suffix:
-            for words, tags in sentences:
-                for word, tag in zip(words, tags):
-                    counts[word][tag] += 1
-        else:
-            for words, tags in sentences:
-                for word, tag in zip(words, tags):
-                    counts[word[:-3]][tag] += 1
-
-        for word, tag_freqs in counts.items():
-            tag_count = tag_freqs.items()
-            if len(tag_count) == 1:
-                tag, mode = max(tag_count, key=lambda item: item[1])
-                if "NOUN" in tag:
-                    self.tagdict[word] = tag
 
 
 def _pc(n, d):

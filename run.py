@@ -4,11 +4,14 @@ from textblob import TextBlob
 from textblob_aptagger.taggers import PerceptronTagger
 from io import open
 import csv
+import logging
 from preprocessing import preprocessing
 from preprocessing import create_fn
 from datetime import timedelta
 from postprocessing import draw_confusion
 from postprocessing import read_results
+logging.basicConfig(filename="logging_file.txt", level=logging.INFO)
+
 
 def _read_tagged(text, sep='|'):
     sentences = []
@@ -49,8 +52,8 @@ def prepare_test_data(sentences):
     return test_sentences
 
 
-def train_tagger(load, file_path, nr_iter, suffix, part_tag):
-    pos_tagger = PerceptronTagger(load=load, use_suffix=suffix, part_tag=part_tag)
+def train_tagger(load, file_path, nr_iter, suffix, part_tag, use_dropout, use_comb):
+    pos_tagger = PerceptronTagger(load=load, use_suffix=suffix, part_tag=part_tag, use_dropout=use_dropout, use_comb=use_comb)
     text = read_file(file_path)
     sentences = _read_tagged(text)
     return pos_tagger.train(sentences, save_loc="textblob_aptagger/model.pickle", nr_iter=nr_iter)
@@ -79,60 +82,86 @@ def compare(input, output):
             wrong += 1
     total = len(text_before)
     accuracy = round(total - wrong) / total
-    print('Accuracy: {0}/{1}={2:0.4f}'.format(total-wrong, total, accuracy))
+    print('Accuracy: {0}/{1}={2:0.4f}'.format(total-wrong, total, accuracy*100))
+    logging.info('Accuracy: {0}/{1}={2:0.4f}'.format(total-wrong, total, accuracy*100))
     return round(accuracy, 6)
 
 
-def run(load, train_set, test_set, iter, suffix, part_tag):
-    train_tagger(load, train_set, iter, suffix, part_tag)
-    pos_tagger = PerceptronTagger(use_suffix=suffix, part_tag=part_tag)
+def run(load, train_set, test_set, iter, suffix, part_tag, use_dropout, use_comb):
+    train_tagger(load, train_set, iter, suffix, part_tag, use_dropout, use_comb)
+    pos_tagger = PerceptronTagger(use_suffix=suffix, part_tag=part_tag, use_comb=use_comb)
     results = test_data(test_set, pos_tagger)
     compare(test_set, results)
 
 
 def main():
     parser = argparse.ArgumentParser()
+    parser.add_argument("--log", help="Any details about the run", default="")
     parser.add_argument("--context", help="Word count before and after target", default=3)
     parser.add_argument("--iter", help="Number of training iterations", default=5)
     parser.add_argument('--random', help="Add this argument to generate a random english word for suffix", action='store_true')
     parser.add_argument('--suffix', help="Add this argument to use target word suffix analysis in training", action='store_true')
     parser.add_argument('--part_tag', help="Add this argument to separate tags into morphological features", action='store_true')
+    parser.add_argument('--use_dropout', help="Add this argument to use randomised feature dropout", action='store_true')
     parser.add_argument('--tag_iter', help="Add this argument to tag the test data set after each training iteration", action='store_true')
+    parser.add_argument('--use_comb', help="Add this argument to use combined features: "
+                                           "1 - one combined feature representing context_len words before and after target,"
+                                           "2 - all combinations", default=0)
     parser.add_argument('--conf_m', help="Add this argument to create a confusion matrix", action='store_true')
     args = parser.parse_args()
     start = time.time()
+    logging.info(args.log)
 
     train = "https://raw.githubusercontent.com/UniversalDependencies/UD_Latvian-LVTB/master/lv_lvtb-ud-train.conllu"
     dev = "https://raw.githubusercontent.com/UniversalDependencies/UD_Latvian-LVTB/master/lv_lvtb-ud-dev.conllu"
     test = "https://raw.githubusercontent.com/UniversalDependencies/UD_Latvian-LVTB/master/lv_lvtb-ud-test.conllu"
 
+    loading = time.time()
+    print("Loading took:")
+    print(str(timedelta(seconds=(loading - start))))
+
     train = preprocessing(train, bool(args.random), int(args.context))
     validation = preprocessing(dev, bool(args.random), int(args.context))
     test = preprocessing(test, bool(args.random), int(args.context))
+
+    preproc = time.time()
+    print("Preprocessing took:")
+    print(str(timedelta(seconds=(preproc - loading))))
 
     # Tag validation data set after each iteration
     if bool(args.tag_iter):
         stop_criterion = False
         iter_n = 1
         print("Iteration", iter_n)
-        train_tagger(False, train, 1, bool(args.suffix), bool(args.part_tag))
+        train_tagger(False, train, 1, bool(args.suffix), bool(args.part_tag), bool(args.use_dropout), int(args.use_comb))
         while not stop_criterion:
             iter_n += 1
             print("Iteration", iter_n)
-            stop_criterion = train_tagger(True, train, 1, bool(args.suffix), bool(args.part_tag))
+            stop_criterion = train_tagger(True, train, 1, bool(args.suffix), bool(args.part_tag), bool(args.use_dropout), int(args.use_comb))
         print("Starting the TEST data set tagging")
-        results = test_data(test, PerceptronTagger(model_file="model_max.pickle", use_suffix=bool(args.suffix), part_tag=bool(args.part_tag)))
+
+        train_include_dev_tag = time.time()
+        print("Training (including DEV tagging) took:")
+        print(str(timedelta(seconds=(train_include_dev_tag - preproc))))
+
+        results = test_data(test, PerceptronTagger(model_file="model_max.pickle", use_suffix=bool(args.suffix), part_tag=bool(args.part_tag), use_comb=int(args.use_comb)))
+
+        test_tag = time.time()
+        print("TEST tagging took:")
+        print(str(timedelta(seconds=(test_tag - train_include_dev_tag))))
+
         print("Final results in TEST set:")
+        logging.info("Final results in TEST set:")
         compare(test, results)
     # Tag validation data set only after all training iterations
     else:
-        run(False, train, validation, int(args.iter), bool(args.suffix), bool(args.part_tag))
+        run(False, train, validation, int(args.iter), bool(args.suffix), bool(args.part_tag), bool(args.use_dropout), int(args.use_comb))
         test = validation
 
     if bool(args.conf_m):
         print("Creating confusion matrix for", create_fn(test, "RESULTS", ".tsv"))
         draw_confusion(create_fn(test, "NOUNS", ".tsv"), test, create_fn(test, "RESULTS", ".tsv"))
-    print("Execution time: ")
+    print("Total execution time: ")
     print(str(timedelta(seconds=(time.time() - start))))
 
 
