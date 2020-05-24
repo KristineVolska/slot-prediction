@@ -18,6 +18,8 @@ python3 run.py
 | --part_tag | Add this argument to separate tags into morphological features | False |
 | --tag_iter | Add this argument to tag the test data set after each training iteration | False |
 | --conf_m | Add this argument to create a confusion matrix | False |
+| --use_dropout | Add this argument to use randomised feature dropout | False |
+| --use_comb | Add this argument to use combined features: 1 - one combined feature representing context_len words before and after target; 2 - all combinations | 0 |
 
 *e.g.:*
 
